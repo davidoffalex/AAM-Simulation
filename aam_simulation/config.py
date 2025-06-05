@@ -12,6 +12,7 @@ UAV_RADIUS_FT = 25.0
 
 # Charging
 CHARGE_TIME_SEC = 15 * 60 # 900 s
+CHARGE_STATIONS = 40
 
 # Separation minimum defaults (ft)
 DEFAULT_MIN_LAT_SEP = 600.0
