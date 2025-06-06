@@ -12,7 +12,7 @@ class Airspace:
         self.vertiports: Dict[str, Vertiport] = {}
         self.corridors: List[Corridor] = []
         self.split_merge_points: List[SplitMergePoint] = []
-        self.routes: Dict[int, Route] {}
+        self.routes: Dict[int, Route] = {}
 
     def add_vertiport(self, name: str, lat: float, lon: float, num_charge_stations: int) -> Vertiport:
         """

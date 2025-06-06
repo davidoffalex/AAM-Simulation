@@ -4,8 +4,8 @@ from aam_simulation.sim_utils import unit_vector
 
 class Corridor:
     def __init__(self,
-                 start_vertiport, # type: Vertiport
-                 end_vertiport, # type: Vertiport
+                 start_vertiport, # type : Vertiport
+                 end_vertiport, # type : Vertiport
                  altitude_ab: float,
                  altitude_ba: float):
         self.start = start_vertiport
