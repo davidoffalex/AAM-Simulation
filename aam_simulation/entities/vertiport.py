@@ -31,7 +31,7 @@ class Vertiport:
         self.position = latlon_to_cartesian(lat, lon, ref_lat) # (x, y) in feet
 
         self.takeoff_queue = deque() # UAV IDs waiting to take off
-        self.landing_queue = deque() # UAV IDs waiting to land/charge
+        self.incoming_landing_times = [] # List of (time, uav_id) tuples
 
         self.charge_stations = [ChargeStation() for _ in range(num_charge_stations)]
         self.last_takeoff_time = -float('inf')
@@ -42,14 +42,6 @@ class Vertiport:
         if (current_time - self.last_takeoff_time) >= 60 and (current_time - self.last_landing_time) >= 60:
             self.takeoff_queue.append(uav_id)
             self.last_takeoff_time = current_time
-            return True
-        return False
-    
-    def request_landing(self, uav_id: int, current_time: int) -> bool:
-        """Appends UAV to landing queue when requesting landing."""
-        if (current_time - self.last_landing_time) >= 60 and (current_time - self.last_takeoff_time) >= 60:
-            self.landing_queue.append(uav_id)
-            self.last_landing_time = current_time
             return True
         return False
     

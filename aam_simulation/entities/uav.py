@@ -216,7 +216,7 @@ class UAV:
                 if self.altitude <= 0.0:
                     self.altitude = 0.0
                     self.speed = 0.0
-                    self._land_at_vertiport(dest_vert = self.destination_vertiport)
+                    self._land_at_vertiport(dest_vert = self.destination_vertiport, time_now=time_step)
                 return
 
             # If corridor_info is not None, we still have a "final leg" to travel before the last waypoint
@@ -254,7 +254,7 @@ class UAV:
                 self.position[0], self.position[1] = dest_xy[0], dest_xy[1]
                 self.altitude = 0.0
                 self.speed = 0.0
-                self._land_at_vertiport(dest_vert = dest)
+                self._land_at_vertiport(dest_vert = dest, time_now=time_step)
             return
         
     def initiate_takeoff(self, takeoff_time: int):
@@ -416,10 +416,11 @@ class UAV:
         time_hr = nm / self.speed
         self.eta = time_hr * 60.0 # in minutes
 
-    def _land_at_vertiport(self, dest_vert: Vertiport):
+    def _land_at_vertiport(self, dest_vert: Vertiport, time_now: int):
         """
         Called when diagonal descent finishes (altitude=0, speed=0, position snapped).
         Switch to CHARGING; Simulation will enqueue at vertiport.
         """
         self.state = UAV.STATE_CHARGING
         self.time_to_charge = config.CHARGE_TIME_SEC
+        dest_vert.last_landing_time = time_now

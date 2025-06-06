@@ -53,38 +53,43 @@ class Simulation:
     def run(self, total_time_sec: int):
         for t in range(total_time_sec):
             self.time = t
-            self._process_takeoff_and_landing()
+            self._process_takeoffs()
             self._update_uavs()
-            if t > 0 and t % 60 == 0:
-                for uav_id in list(self.active_uav_ids):
-                    self.uavs[uav_id].update_eta()
+            for uav_id in list(self.active_uav_ids):
+                self.uavs[uav_id].update_eta()
             if self.enable_delays and t > 0 and t % (5*60) == 0: # Delays refresh every 5 minutes
                 self._evaluate_and_apply_delays()
             for v in self.airspace.vertiports.values():
                 v.tick()
     
-    def _process_takeoff_and_landing(self):
+    def _process_takeoffs(self):
         for v in self.airspace.vertiports.values():
-            # Landing
-            if v.landing_queue:
-                uav_id = v.landing_queue[0]
-                assigned = v.assign_charge_station(uav_id)
-                if assigned:
-                    v.landing_queue.popleft()
-                    uav = self.uavs[uav_id]
-                    uav.state = UAV.STATE_CHARGING
-                    uav.time_to_charge = config.CHARGE_TIME_SEC
-            
             # Takeoff
             if v.takeoff_queue:
                 uav_id = v.takeoff_queue[0]
-                if self.delay_end_time is None or self.time >= self.delay_end_time:
+
+                # Condition 1: Another UAV is landing within 60 seconds
+                imminent_landing = any(
+                    uav.destination_vertiport == v and uav.eta is not None and 0.0 < uav.eta < 1.0
+                    for uav in self.uavs.values()
+                    if uav.state in {UAV.STATE_CLIMB, UAV.STATE_CRUISE, UAV.STATE_DESCENT}
+                )
+                # Condition 2: Recent landing
+                recent_landing = (self.time - v.last_landing_time) < 60
+
+                # Condition 3: Recent takeoff
+                recent_takeoff = (self.time - v.last_takeoff_time) < 60
+
+                # Condition 4: Global conflict-based delay
+                delay_active = self.delay_end_time is not None and self.time < self.delay_end_time
+
+                if not (imminent_landing or recent_landing or recent_takeoff or delay_active):
                     uav = self.uavs[uav_id]
                     uav.initiate_takeoff(self.time)
                     v.takeoff_queue.popleft()
+                    v.last_takeoff_time = self.time
     
     def _update_uavs(self):
-        finished = []
         airborne_ids = []
         for uav_id in list(self.active_uav_ids):
             uav = self.uavs[uav_id]
@@ -106,13 +111,25 @@ class Simulation:
                 ideal_min = ((ideal_nm / config.CRUISE_SPEED_KT) + config.CHARGE_TIME_SEC) * 60.0
                 ter = actual_min / ideal_min if ideal_min > 0 else 1.0
                 self.ter_list.append(ter)
-                finished.append(uav_id)
+
+                #Re-enqueue this UAV for takeoff at its current vertiport
+                uav.route.waypoints.reverse()
+                uav.route.legs = [
+                    (uav.route.waypoints[i], uav.route.waypoints[i+1])
+                    for i in range(len(uav.route.waypoints) - 1)
+                ]
+                uav.flight_plan = uav.route.waypoints.copy()
+                uav.current_leg_index = 0
+                uav.destination_vertiport = uav.route.waypoints[-1]
+                uav.has_deviated = False
+                current_vertiport_name = uav.route.waypoints[0].name
+                self.airspace.vertiports[current_vertiport_name].request_takeoff(uav_id, current_time=self.time)
+
+                # Reset its trip duration counter
+                uav.trip_duration = 0
 
             if uav.state in {UAV.STATE_CLIMB, UAV.STATE_CRUISE, UAV.STATE_DESCENT, UAV.STATE_EVASIVE, UAV.STATE_HOLD}:
                 airborne_ids.append(uav_id)
-        
-        for uav_id in finished:
-            self.active_uav_ids.remove(uav_id)
         
         # Pairwise conflict detection
         for i in range(len(airborne_ids)):
