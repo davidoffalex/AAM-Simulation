@@ -358,8 +358,8 @@ class UAV:
         else:
             desired_heading_2d = np.array([0.0, 0.0])
         current_heading_2d = unit_vector(self.heading[:2])
-        turn_rate_out = math.radians(5.5)
-        turn_rate_rec = math.radians(3.0)
+        turn_rate_out = math.radians(config.TURN_RATE_OUTBOUND)
+        turn_rate_rec = math.radians(config.TURN_RATE_RECOVER)
 
         if elapsed <= 5:
             sign = -1 if self.evasion_type == "LEFT" else +1

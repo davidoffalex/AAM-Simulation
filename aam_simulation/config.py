@@ -3,8 +3,11 @@ import math
 KNOTS_TO_FT_PER_SEC = (6076.0 / 3600.0)
 FT_IN_NM = 6076.0
 
-# Delays
+# Simulation Parameters
 MIN_DELAY_TIME_S = 300 # in seconds
+AIRSPACE = "Simple" # Either "Standard" or "Simple"
+UAVS_PER_ROUTE = 40
+RUN_TIME_SEC = 7200 # run time of simulation, i.e. how long you want the simulation to run for
 
 # Climb/descent rates (ft/s)
 CLIMB_RATE_FPS = 900.0 / 60.0
