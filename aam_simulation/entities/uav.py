@@ -9,6 +9,7 @@ from aam_simulation.entities.route import Route
 import config
 
 KNOTS_TO_FT_PER_SEC = (6076.0 / 3600.0)
+FT_IN_NM = 6076.0
 
 class UAV:
     # UAV States
@@ -198,3 +199,230 @@ class UAV:
                 if not isinstance(dest, Vertiport): # passed a split/merge point
                     self.current_leg_index += 1
                 # Else: we are at a vertiport boundary. If this wasn't caught just before, next tick handles it.
+            return 
+        
+        # 6. Descent (diagonal descent + decelerate)
+        if self.state == UAV.STATE_DESCENT:
+            corridor_info = self._find_current_corridor()
+
+            # If we have no more legs, that means we are already effectively over the final Vertiport
+            # Just keep descending/zeroing out if needed
+            if corridor_info is None:
+                # We assume we are directly over the destination
+                descent_rate_fps = config.DESCENT_RATE_FPS
+                if self.altitude > 0.0:
+                    self.altitude -= descent_rate_fps
+                    if self.altitude < 0.0:
+                        self.altitude = 0.0
+                        self.speed = 0.0
+
+                if self.altitude <= 0.0:
+                    self.altitude = 0.0
+                    self.speed = 0.0
+                    self._land_at_vertiport(dest_vert = self.destination_vertiport)
+                return
+
+            # If corridor_info is not None, we still have a "final leg" to travel before the last waypoint
+            _, origin, dest, cruise_altitude, heading_unit = corridor_info
+
+            # a) Vertical descent: 7.5 ft/s
+            descent_rate_fps = config.DESCENT_RATE_FPS
+            self.altitude -= descent_rate_fps
+            if self.altitude < 0.0:
+                self.altitude = 0.0
+            
+            # b) Horizontal deceleration: linearly from 115 kt to 0 over the same vertical interval
+            if cruise_altitude > 0:
+                t_descent_sec = cruise_altitude / descent_rate_fps
+                decel_rate_kt_per_sec = config.CRUISE_SPEED_KT / t_descent_sec
+            else:
+                decel_rate_kt_per_sec = 0.0
+            
+            self.speed -= decel_rate_kt_per_sec
+            if self.speed < 0.0:
+                self.speed = 0.0
+            
+            # c) Horizontal movement: move forward by current speed (ft/s)
+            speed_fps = self.speed * KNOTS_TO_FT_PER_SEC
+            movement = np.array([heading_unit[0], heading_unit[1], 0.0]) * speed_fps
+            self.position += movement
+
+            # d) If we have reached or passed the destination 2D point, snap and land
+            dest_xy = np.array([dest.position[0], dest.position[1]])
+            cur_xy = np.array([self.position[0], self.position[1]])
+            horiz_dist_to_dest_ft = np.linalg.norm(dest_xy - cur_xy)
+
+            if horiz_dist_to_dest_ft <= speed_fps or self.altitude <= 0.0:
+                # Snap exactly onto the vertiport
+                self.position[0], self.position[1] = dest_xy[0], dest_xy[1]
+                self.altitude = 0.0
+                self.speed = 0.0
+                self._land_at_vertiport(dest_vert = dest)
+            return
+        
+    def initiate_takeoff(self, takeoff_time: int):
+        """
+        Called by Simulation when Vertiport grants takeoff clearance. 
+        Switch to CLIMB. Set initial heading & reset timers.
+        """
+        self.state = UAV.STATE_CLIMB
+        self.speed = 0.0
+        self.altitude = 0.0
+        corridor_info = self._find_current_corridor()
+        if corridor_info:
+            _, _, _, _, heading_unit = corridor_info
+            self.heading = np.array([heading_unit[0], heading_unit[1], 0.0])
+        self.trip_duration = 0
+        self.time_in_current_state = 0
+
+    def check_for_conflicts(self, other, min_lat_sep: float, min_vert_sep: float) -> bool:
+        horiz = math.hypot(self.position[0] - other.position[0],
+                           self.position[1] - other.position[1])
+        vert = abs(self.altitude - other.altitude)
+        if horiz < (min_lat_sep + self.sphere_radius + other.sphere_radius) and vert < min_vert_sep:
+            return True
+        return False
+    
+    def initiate_evasive_action(self, intruder, current_time: int, min_vert_sep: float):
+        """
+        Determines the relative location of the intruding UAV and determine the corresponding
+        evasive maneuver.
+        """
+        rel_vec = np.array([
+            intruder.position[0] - self.position[0],
+            intruder.position[1] - self.position[1],
+            intruder.altitude - self.altitude
+        ])
+        rel_vec_2d = rel_vec[:2]
+        heading_2d = self.heading[:2]
+        theta = signed_angle_between(heading_2d, rel_vec_2d)
+        deg = math.degrees(theta)
+
+        if abs(deg) <= 45:
+            designation = "AHEAD"
+        elif abs(deg) >= 135:
+            designation = "BEHIND"
+        elif 45 < deg < 135:
+            designation = "LEFT"
+        else:
+            designation = "RIGHT"
+        
+        self.original_speed = self.speed
+        self.original_altitude = self.altitude
+        self.evasive_start_time = current_time
+        self.in_conflict = True
+        self.evasion_type = designation
+
+        if designation == "AHEAD":
+            if self.speed >= config.MIN_SPEED_TO_SLOW:
+                self.speed -= 2.0
+                self.state = UAV.STATE_EVASIVE
+                self.evasion_phase = "SPEED_REDUCTION"
+            else:
+                self.altitude += min_vert_sep
+                self.state = UAV.STATE_HOLD
+        
+        elif designation == "BEHIND":
+            if self.speed <= config.MAX_SPEED_TO_INCREASE:
+                self.speed += 2.0
+                self.state = UAV.STATE_EVASIVE
+                self.evasion_phase = "SPEED_INCREASE"
+            else:
+                self.altitude += min_vert_sep
+                self.state = UAV.STATE_HOLD
+        
+        elif designation == "LEFT":
+            self.state = UAV.STATE_EVASIVE
+            self.evasion_phase = "TURN_RIGHT_OUTBOUND"
+        
+        elif designation == "RIGHT":
+            self.state = UAV.STATE_EVASIVE
+            self.evasion_phase = "TURN_LEFT_OUTBOUND"
+    
+    def _handle_evasive(self, current_time: int):
+        """
+        Contains logic to handle the evasive manuever depending on if the intruding UAV is
+        Ahead, Behind, Left, or Right. 
+        """
+        elapsed = current_time - self.evasion_start_time
+
+        if self.evasion_type in {"AHEAD", "BEHIND"}:
+            if elapsed >= 60 and self.evasion_phase in {"SPEED_REDUCTION", "SPEED_INCREASE"}:
+                self.speed = self.original_speed
+                self.evasion_phase = None
+                self.in_conflict = False
+                self.state = UAV.STATE_CRUISE
+            return
+        
+        corridor_info = self._find_current_corridor()
+        if corridor_info:
+            _, _, _, _, desired_heading_unit = corridor_info
+            desired_heading_2d = np.array([desired_heading_unit[0], desired_heading_unit[1]])
+        else:
+            desired_heading_2d = np.array([0.0, 0.0])
+        current_heading_2d = unit_vector(self.heading[:2])
+        turn_rate_out = math.radians(5.5)
+        turn_rate_rec = math.radians(3.0)
+
+        if elapsed <= 5:
+            sign = -1 if self.evasion_type == "LEFT" else +1
+            angle = sign * turn_rate_out
+            rot = np.array([[math.cos(angle), -math.sin(angle)],
+                            [math.sin(angle), math.cos(angle)]])
+            new_h = rot.dot(current_heading_2d)
+            self.heading = np.array([new_h[0], new_h[1], 0.0])
+            return
+        
+        if elapsed <= 30:
+            return
+        
+        angle_diff = signed_angle_between(current_heading_2d, desired_heading_2d)
+        if abs(angle_diff) <= turn_rate_rec:
+            self.heading = np.array([desired_heading_2d[0], desired_heading_2d[1], 0.0])
+            self.in_conflict = False
+            self.evasion_phase = None
+            self.state = UAV.STATE_CRUISE
+        else:
+            sign = +1 if angle_diff > 0 else -1
+            angle = sign * turn_rate_rec
+            rot = np.array([[math.cos(angle), -math.sin(angle)],
+                            [math.sin(angle), math.cos(angle)]])
+            new_h = rot.dot(current_heading_2d)
+            self.heading = np.array([new_h[0], new_h[1], 0.0])
+
+    def maybe_deviate(self):
+        """Randomly deviate a UAV based on probability in config.py"""
+        if self.has_deviated:
+            return
+        if random.random() < config.PROBABILITY_OF_DIVERTION:
+            self.has_deviated = True
+            if self.current_leg_index < len(self.route.waypoints):
+                current_wp = self.route.waypoints[self.current_leg_index]
+            else:
+                return
+            self.flight_plan = [current_wp, self.route.alternate_vertiport]
+            self.route.legs = [
+                (self.flight_plan[i], self.flight_plan[i+1])
+                for i in range(len(self.flight_plan)-1)
+            ]
+            self.current_leg_index = 0
+    
+    def update_eta(self):
+        """Updates the current ETA of the UAV in minutes"""
+        if self.speed is None or self.speed <= 0:
+            self.eta = None
+            return
+        dest_pos = self.destination_vertiport.position
+        cur_xy = np.array([self.position[0], self.position[1]])
+        horiz_ft = np.linalg.norm(dest_pos - cur_xy)
+        nm = horiz_ft / 6076.0
+        time_hr = nm / self.speed
+        self.eta = time_hr * 60.0 # in minutes
+
+    def _land_at_vertiport(self, dest_vert: Vertiport):
+        """
+        Called when diagonal descent finishes (altitude=0, speed=0, position snapped).
+        Switch to CHARGING; Simulation will enqueue at vertiport.
+        """
+        self.state = UAV.STATE_CHARGING
+        self.time_to_charge = config.CHARGE_TIME_SEC

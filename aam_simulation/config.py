@@ -21,3 +21,10 @@ DEFAULT_MIN_VERT_SEP = 100.0
 # Evasive turn rates (rad/s)
 TURN_RATE_OUTBOUND = math.radians(5.5)
 TURN_RATE_RECOVER = math.radians(3.0)
+
+# Evasive minimums
+MIN_SPEED_TO_SLOW = 112.0 # knots, UAV must be at least this fast if it intends to slow down
+MAX_SPEED_TO_INCREASE = 118.0 # knots, UAV must be at most this fast if it intends to speed up
+
+# Chance of deviation
+PROBABILITY_OF_DIVERTION = 0.001 / 60.0 # (0.001 per minute)
