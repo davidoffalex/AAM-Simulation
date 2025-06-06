@@ -8,9 +8,6 @@ from aam_simulation.entities.corridor import Corridor, SplitMergePoint
 from aam_simulation.entities.route import Route
 import config
 
-KNOTS_TO_FT_PER_SEC = (6076.0 / 3600.0)
-FT_IN_NM = 6076.0
-
 class UAV:
     # UAV States
     STATE_TAXI = "TAXI"
@@ -142,7 +139,7 @@ class UAV:
                 self.speed = config.CRUISE_SPEED_KT
             
             # c) Horizontal movement: move forward by current speed (in ft/s)
-            speed_fps = self.speed * KNOTS_TO_FT_PER_SEC # convert knots to ft/s
+            speed_fps = self.speed * config.KNOTS_TO_FT_PER_SEC # convert knots to ft/s
             movement = np.array([heading_unit[0], heading_unit[1], 0.0]) * speed_fps
             self.position += movement
 
@@ -174,7 +171,7 @@ class UAV:
             if cruise_altitude > 0:
                 descent_rate_fps = config.DESCENT_RATE_FPS
                 t_descent_sec = cruise_altitude / descent_rate_fps
-                initial_speed_ftps = config.CRUISE_SPEED_KT * KNOTS_TO_FT_PER_SEC
+                initial_speed_ftps = config.CRUISE_SPEED_KT * config.KNOTS_TO_FT_PER_SEC
                 avg_speed_ftps = initial_speed_ftps / 2.0 # (cruise speed + 0) / 2, average of the initial and final speed
                 required_horiz_dist_for_descent = avg_speed_ftps * t_descent_sec
             else:
@@ -186,7 +183,7 @@ class UAV:
                 return
             
             # Otherwise, remain at cruise altitude & speed, moving forward by the cruise speed each sec
-            speed_fps = config.CRUISE_SPEED_KT * KNOTS_TO_FT_PER_SEC
+            speed_fps = config.CRUISE_SPEED_KT * config.KNOTS_TO_FT_PER_SEC
             movement = np.array([heading_unit[0], heading_unit[1], 0.0]) * speed_fps
             self.position += movement
             self.altitude = cruise_altitude
@@ -243,7 +240,7 @@ class UAV:
                 self.speed = 0.0
             
             # c) Horizontal movement: move forward by current speed (ft/s)
-            speed_fps = self.speed * KNOTS_TO_FT_PER_SEC
+            speed_fps = self.speed * config.KNOTS_TO_FT_PER_SEC
             movement = np.array([heading_unit[0], heading_unit[1], 0.0]) * speed_fps
             self.position += movement
 
@@ -415,7 +412,7 @@ class UAV:
         dest_pos = self.destination_vertiport.position
         cur_xy = np.array([self.position[0], self.position[1]])
         horiz_ft = np.linalg.norm(dest_pos - cur_xy)
-        nm = horiz_ft / 6076.0
+        nm = horiz_ft / config.FT_IN_NM
         time_hr = nm / self.speed
         self.eta = time_hr * 60.0 # in minutes
 

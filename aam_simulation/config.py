@@ -1,4 +1,10 @@
 import math
+# Constants
+KNOTS_TO_FT_PER_SEC = (6076.0 / 3600.0)
+FT_IN_NM = 6076.0
+
+# Delays
+MIN_DELAY_TIME_S = 300 # in seconds
 
 # Climb/descent rates (ft/s)
 CLIMB_RATE_FPS = 900.0 / 60.0
