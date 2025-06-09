@@ -28,7 +28,6 @@ class Simulation:
             for _ in range(count):
                 uav = UAV(self.next_uav_id,
                           route,
-                          airspace.vertiports,
                           airspace.corridors,
                           airspace.split_merge_points,
                           airspace.ref_lat)
@@ -85,7 +84,7 @@ class Simulation:
 
                 if not (imminent_landing or recent_landing or recent_takeoff or delay_active):
                     uav = self.uavs[uav_id]
-                    uav.initiate_takeoff(self.time)
+                    uav.initiate_takeoff()
                     v.takeoff_queue.popleft()
                     v.last_takeoff_time = self.time
     

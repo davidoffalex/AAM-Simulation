@@ -21,13 +21,11 @@ class UAV:
     def __init__(self,
                  uav_id: int,
                  route: Route,
-                 vertiport_dict: dict,
                  corridor_list: list,
                  split_merge_points: list,
                  ref_lat: float):
         self.id = uav_id
         self.route = route
-        self.vertiport_dict = vertiport_dict
         self.corridors = corridor_list
         self.smp = split_merge_points
         self.ref_lat = ref_lat
@@ -257,7 +255,7 @@ class UAV:
                 self._land_at_vertiport(dest_vert = dest, time_now=time_step)
             return
         
-    def initiate_takeoff(self, takeoff_time: int):
+    def initiate_takeoff(self):
         """
         Called by Simulation when Vertiport grants takeoff clearance. 
         Switch to CLIMB. Set initial heading & reset timers.
