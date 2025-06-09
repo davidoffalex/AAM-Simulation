@@ -6,7 +6,7 @@ from aam_simulation.sim_utils import unit_vector, signed_angle_between
 from aam_simulation.entities.vertiport import Vertiport
 from aam_simulation.entities.corridor import Corridor, SplitMergePoint
 from aam_simulation.entities.route import Route
-import config
+from aam_simulation import config
 
 class UAV:
     # UAV States
@@ -66,6 +66,7 @@ class UAV:
         for corridor in self.corridors:
             seg = corridor.get_segment_info(origin, dest)
             if seg:
+                print(f"UAV {self.id} matched corridor for leg {origin.name} → {dest.name}") # DEBUG
                 altitude, heading_unit = seg
                 return corridor, origin, dest, altitude, heading_unit
         return None
@@ -85,6 +86,8 @@ class UAV:
             UAV.STATE_HOLD
         }:
             self.trip_duration += 1
+            print(f"[{self.id}] state: {self.state}, alt: {self.altitude:.1f}, speed: {self.speed:.1f}, pos: {self.position}") # DEBUG
+
         
         # 1. CHARGING State
         if self.state == UAV.STATE_CHARGING:

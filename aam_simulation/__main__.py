@@ -1,17 +1,16 @@
 from aam_simulation.airspace import Airspace
 from aam_simulation.simulation import Simulation
-import config
+from aam_simulation import config
 
 def main():
 
     # 1. Build the airspace
     if config.AIRSPACE == "Standard":
         airspace = build_standard_airspace()
+        num_uavs = {i: config.UAVS_PER_ROUTE for i in range (1, 7)}
     else:
         airspace = build_simple_airspace()
-
-    # 2. Specify UAV counts per route
-    num_uavs = {i: config.UAVS_PER_ROUTE for i in range (1, 7)}
+        num_uavs = {i: config.UAVS_PER_ROUTE for i in range (1, 3)}
 
     # 3. Create simulation
     sim = Simulation(airspace, num_uavs, min_lat_sep=config.DEFAULT_MIN_LAT_SEP,

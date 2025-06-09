@@ -1,6 +1,6 @@
 from collections import deque
 from aam_simulation.sim_utils import latlon_to_cartesian
-import config
+from aam_simulation import config
 
 class ChargeStation: 
     def __init__(self):
@@ -30,6 +30,7 @@ class Vertiport:
         self.lon = lon
         self.position = latlon_to_cartesian(lat, lon, ref_lat) # (x, y) in feet
 
+        self.pending_takeoff_ids = deque()
         self.takeoff_queue = deque() # UAV IDs waiting to take off
         self.incoming_landing_times = [] # List of (time, uav_id) tuples
 
@@ -37,13 +38,9 @@ class Vertiport:
         self.last_takeoff_time = -float('inf')
         self.last_landing_time = -float('inf')
 
-    def request_takeoff(self, uav_id: int, current_time: int) -> bool:
-        """Appends UAV to takeoff queue when requesting takeoff."""
-        if (current_time - self.last_takeoff_time) >= 60 and (current_time - self.last_landing_time) >= 60:
-            self.takeoff_queue.append(uav_id)
-            self.last_takeoff_time = current_time
-            return True
-        return False
+    def request_takeoff(self, uav_id: int) -> bool:
+        """Store UAV as pending. Actual queueing is handled during tick()."""
+        self.pending_takeoff_ids.append(uav_id)
     
     def assign_charge_station(self, uav_id: int) -> bool:
         """Assigns UAV to an available charge station."""
@@ -53,7 +50,21 @@ class Vertiport:
                 return True
         return False
     
-    def tick(self):
+    def tick(self, current_time: int):
         """Defines vertiport behavior in each simulation tick."""
         for station in self.charge_stations:
             station.tick()
+        
+        # Try to promote pending UAVs into takeoff queue
+        for _ in range(len(self.pending_takeoff_ids)):
+            uav_id = self.pending_takeoff_ids.popleft()
+            if (self._can_takeoff(current_time)):
+                self.takeoff_queue.append(uav_id)
+                self.last_takeoff_time = -float('inf')  # Let _process_takeoffs() enforce time gap
+            else:
+                self.pending_takeoff_ids.append(uav_id)
+
+    def _can_takeoff(self, current_time: int) -> bool:
+        """Returns True if no takeoff or landing occurred in the last 60 seconds."""
+        return ((current_time - self.last_takeoff_time) >= 60 and
+                (current_time - self.last_landing_time) >= 60)

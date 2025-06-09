@@ -4,7 +4,7 @@ from typing import Dict
 from aam_simulation.entities.vertiport import Vertiport
 from aam_simulation.entities.uav import UAV
 from aam_simulation.airspace import Airspace
-import config
+from aam_simulation import config
 
 class Simulation:
     def __init__(self,
@@ -33,10 +33,14 @@ class Simulation:
                           airspace.ref_lat)
                 self.uavs[self.next_uav_id] = uav
                 origin_name = route.waypoints[0].name
-                airspace.vertiports[origin_name].request_takeoff(self.next_uav_id, current_time=0)
+                airspace.vertiports[origin_name].request_takeoff(self.next_uav_id)
                 self.active_uav_ids.add(self.next_uav_id)
                 self.next_uav_id += 1
-        
+            
+        print(f"UAV {uav.id} route legs:") #DEBUG
+        for leg in uav.route.legs: #DEBUG
+            print(f"  {leg[0].name} → {leg[1].name}") #DEBUG
+
         # Statistics
         self.time = 0
         self.conflict_count = 0
@@ -59,7 +63,7 @@ class Simulation:
             if self.enable_delays and t > 0 and t % (5*60) == 0: # Delays refresh every 5 minutes
                 self._evaluate_and_apply_delays()
             for v in self.airspace.vertiports.values():
-                v.tick()
+                v.tick(current_time=self.time)
     
     def _process_takeoffs(self):
         for v in self.airspace.vertiports.values():
@@ -94,6 +98,8 @@ class Simulation:
             uav = self.uavs[uav_id]
             prev_state = uav.state
             uav._update_state(self.time)
+            if uav.state == UAV.STATE_DESCENT: # DEBUG
+                print(f"[{uav.id}] entered DESCENT from {prev_state}") # DEBUG
 
             if prev_state == UAV.STATE_DESCENT and uav.state == UAV.STATE_CHARGING:
                 # Landed and moved to charging
@@ -102,6 +108,7 @@ class Simulation:
             if prev_state == UAV.STATE_CHARGING and uav.state == UAV.STATE_TAXI:
                 # Completed one full trip
                 self.throughput_count += 1
+                print(f"trip duration: {uav.trip_duration}") # DEBUG
                 actual_min = uav.trip_duration / 60.0
                 start_pos = uav.flight_plan[0].position
                 dest_pos = uav.destination_vertiport.position
@@ -122,7 +129,7 @@ class Simulation:
                 uav.destination_vertiport = uav.route.waypoints[-1]
                 uav.has_deviated = False
                 current_vertiport_name = uav.route.waypoints[0].name
-                self.airspace.vertiports[current_vertiport_name].request_takeoff(uav_id, current_time=self.time)
+                self.airspace.vertiports[current_vertiport_name].request_takeoff(uav_id)
 
                 # Reset its trip duration counter
                 uav.trip_duration = 0
@@ -164,9 +171,10 @@ class Simulation:
     
     def get_statistics(self):
         avg_ter = sum(self.ter_list) / len(self.ter_list) if self.ter_list else None
+        throughput = self.throughput_count / (config.RUN_TIME_SEC / 60)
         return {
             "num_conflicts": self.total_conflicts,
             "num_collisions": self.total_collisions,
-            "throughput": self.throughput_count,
+            "throughput": throughput,
             "average_TER": avg_ter
         }

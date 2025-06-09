@@ -23,10 +23,10 @@ class Corridor:
         Otherwise return None.
         """
 
-        if origin == self.start and destination == self.end:
+        if origin.name == self.start.name and destination.name == self.end.name:
             altitude = self.altitude_ab
             direction_vec = self.end_pos - self.start_pos
-        elif origin == self.end and destination == self.start:
+        elif origin.name == self.end.name and destination.name == self.start.nameYes:
             altitude = self.altitude_ba
             direction_vec = self.start_pos - self.end_pos
         else:
