@@ -6,8 +6,8 @@ FT_IN_NM = 6076.0
 # Simulation Parameters
 MIN_DELAY_TIME_S = 300 # in seconds
 AIRSPACE = "Simple" # Either "Standard" or "Simple"
-UAVS_PER_ROUTE = 100
-RUN_TIME_SEC = 1 * 24 * 60 * 60 # run time of simulation, i.e. how long you want the simulation to run for
+UAVS_PER_ROUTE = 40
+RUN_TIME_SEC = 12 * 60 * 60 # run time of simulation, i.e. how long you want the simulation to run for
 
 # Climb/descent rates (ft/s)
 CLIMB_RATE_FPS = 900.0 / 60.0
@@ -23,9 +23,10 @@ UAV_RADIUS_FT = 25.0
 CHARGE_TIME_SEC = 15 * 60 # 900 s
 CHARGE_STATIONS = 40
 
-# Separation minimum defaults (ft)
-DEFAULT_MIN_LAT_SEP = 600.0
-DEFAULT_MIN_VERT_SEP = 100.0
+# Separation minimum defaults
+DEFAULT_MIN_LAT_SEP = 600.0 # feet
+DEFAULT_MIN_VERT_SEP = 100.0 # feet
+TIME_BETWEEN_LANDING_TAKEOFF = 120 # seconds
 
 # Evasive turn rates (rad/s)
 TURN_RATE_OUTBOUND = math.radians(5.5)

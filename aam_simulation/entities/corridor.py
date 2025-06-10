@@ -26,7 +26,7 @@ class Corridor:
         if origin.name == self.start.name and destination.name == self.end.name:
             altitude = self.altitude_ab
             direction_vec = self.end_pos - self.start_pos
-        elif origin.name == self.end.name and destination.name == self.start.nameYes:
+        elif origin.name == self.end.name and destination.name == self.start.name:
             altitude = self.altitude_ba
             direction_vec = self.start_pos - self.end_pos
         else:

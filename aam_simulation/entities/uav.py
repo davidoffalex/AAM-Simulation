@@ -37,6 +37,7 @@ class UAV:
         self.sphere_radius = config.UAV_RADIUS_FT
 
         self.state = UAV.STATE_TAXI
+        self.waiting_for_charge = False
         self.time_in_current_state = 0
         self.current_leg_index = 0
         self.altitude = 0.0
@@ -66,28 +67,26 @@ class UAV:
         for corridor in self.corridors:
             seg = corridor.get_segment_info(origin, dest)
             if seg:
-                print(f"UAV {self.id} matched corridor for leg {origin.name} → {dest.name}") # DEBUG
                 altitude, heading_unit = seg
                 return corridor, origin, dest, altitude, heading_unit
         return None
     
-    def _update_state(self, time_step: int):
+    def update_state(self, time_step: int):
         """
         Called once per second by Simulation. Updates position, state transitions,
         conflict recovery, charging countdown, and other UAV state attributes.
         """
 
-        # If airborne (in any flight-phase), update trip_duration
+        # In all phases except for charging/taxi, update trip duration
         if self.state in {
             UAV.STATE_CLIMB,
             UAV.STATE_CRUISE,
             UAV.STATE_DESCENT,
             UAV.STATE_EVASIVE,
-            UAV.STATE_HOLD
+            UAV.STATE_HOLD,
+            UAV.STATE_TAXI
         }:
             self.trip_duration += 1
-            print(f"[{self.id}] state: {self.state}, alt: {self.altitude:.1f}, speed: {self.speed:.1f}, pos: {self.position}") # DEBUG
-
         
         # 1. CHARGING State
         if self.state == UAV.STATE_CHARGING:
@@ -99,6 +98,7 @@ class UAV:
         
         # 2. TAXI State
         if self.state == UAV.STATE_TAXI:
+            self.flight_plan[0].request_takeoff(self.id)
             return # waiting for takeoff clearance
         
         # 3. EVASIVE or HOLD
@@ -108,6 +108,11 @@ class UAV:
         
         if self.state == UAV.STATE_HOLD: 
             # Remain in HOLD until Simulation clears conflict
+            if self.waiting_for_charge:
+                if self.destination_vertiport.assign_charge_station(self.id):
+                    self.state = UAV.STATE_CHARGING
+                    self.time_to_charge = config.CHARGE_TIME_SEC
+                    self.waiting_for_charge = False
             return
         
         # 4. CLIMB (Diagonal climb + accelerate)
@@ -307,7 +312,7 @@ class UAV:
         
         self.original_speed = self.speed
         self.original_altitude = self.altitude
-        self.evasive_start_time = current_time
+        self.evasion_start_time = current_time
         self.in_conflict = True
         self.evasion_type = designation
 
@@ -422,6 +427,13 @@ class UAV:
         Called when diagonal descent finishes (altitude=0, speed=0, position snapped).
         Switch to CHARGING; Simulation will enqueue at vertiport.
         """
-        self.state = UAV.STATE_CHARGING
-        self.time_to_charge = config.CHARGE_TIME_SEC
         dest_vert.last_landing_time = time_now
+        # try to take an available charge station
+        if dest_vert.assign_charge_station(self.id):
+            self.state = UAV.STATE_CHARGING
+            self.time_to_charge = config.CHARGE_TIME_SEC
+            self.waiting_for_charge = False
+        else:
+            # no charger, wait for one to open
+            self.state = UAV.STATE_HOLD
+            self.waiting_for_charge = True

@@ -40,7 +40,8 @@ class Vertiport:
 
     def request_takeoff(self, uav_id: int) -> bool:
         """Store UAV as pending. Actual queueing is handled during tick()."""
-        self.pending_takeoff_ids.append(uav_id)
+        if uav_id not in self.pending_takeoff_ids:
+            self.pending_takeoff_ids.append(uav_id)
     
     def assign_charge_station(self, uav_id: int) -> bool:
         """Assigns UAV to an available charge station."""
@@ -66,5 +67,5 @@ class Vertiport:
 
     def _can_takeoff(self, current_time: int) -> bool:
         """Returns True if no takeoff or landing occurred in the last 60 seconds."""
-        return ((current_time - self.last_takeoff_time) >= 60 and
-                (current_time - self.last_landing_time) >= 60)
+        return ((current_time - self.last_takeoff_time) >= config.TIME_BETWEEN_LANDING_TAKEOFF and
+                (current_time - self.last_landing_time) >= config.TIME_BETWEEN_LANDING_TAKEOFF)

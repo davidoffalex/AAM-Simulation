@@ -61,6 +61,9 @@ def build_simple_airspace() -> Airspace:
     airspace.add_vertiport("B", lat=29.02, lon=-81.33, num_charge_stations=config.CHARGE_STATIONS)
     airspace.add_vertiport("C", lat=29.17, lon=-81.05, num_charge_stations=config.CHARGE_STATIONS)
 
+    airspace.add_corridor("A", "B", alt_ab=3000.0, alt_ba=3200.0)
+    airspace.add_corridor("B", "C", alt_ab=3000.0, alt_ba=3200.0)
+
     airspace.define_route(1, ["A", "B"], alternate_vert_name="C")
     airspace.define_route(2, ["B", "C"], alternate_vert_name="A")
 
